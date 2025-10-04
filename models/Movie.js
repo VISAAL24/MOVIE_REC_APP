@@ -16,7 +16,7 @@ const movieSchema = new mongoose.Schema({
     required: true,
     trim: true
   }],
-  musicDirector: {
+  movieDirector: {
     type: String,
     required: true,
     trim: true
@@ -28,7 +28,7 @@ const movieSchema = new mongoose.Schema({
   },
   downloadLink: {
     type: String,
-    required: true,
+    required: false,
     trim: true
   },
   description: {
@@ -73,6 +73,10 @@ const movieSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }
 }, {
   timestamps: true

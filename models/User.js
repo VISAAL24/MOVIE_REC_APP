@@ -42,7 +42,9 @@ const userSchema = new mongoose.Schema({
   dislikedMovies: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Movie'
-  }]
+  }],
+  
+  
 }, {
   timestamps: true
 });

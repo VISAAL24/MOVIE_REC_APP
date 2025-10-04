@@ -6,16 +6,18 @@ const MovieForm = ({ movie, onSubmit, onCancel }) => {
     title: '',
     categories: [''],
     artists: [''],
-    musicDirector: '',
+    movieDirector: '',
     language: '',
     downloadLink: '',
     description: '',
     releaseYear: new Date().getFullYear(),
     duration: '',
     posterUrl: '',
-    trailerUrl: ''
+    trailerUrl: '',
+    rating: 0 // Initialize rating
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (movie) {
@@ -23,23 +25,25 @@ const MovieForm = ({ movie, onSubmit, onCancel }) => {
         title: movie.title || '',
         categories: movie.categories || [''],
         artists: movie.artists || [''],
-        musicDirector: movie.musicDirector || '',
+        movieDirector: movie.musicDirector || '',
         language: movie.language || '',
         downloadLink: movie.downloadLink || '',
         description: movie.description || '',
-        releaseYear: movie.releaseYear || new Date().getFullYear(),
+        releaseYear: movie.releaseYear ? parseInt(movie.releaseYear) : new Date().getFullYear(),
         duration: movie.duration || '',
         posterUrl: movie.posterUrl || '',
-        trailerUrl: movie.trailerUrl || ''
+        trailerUrl: movie.trailerUrl || '',
+        rating: movie.rating ? parseInt(movie.rating) : 0 // Initialize rating
       });
     }
   }, [movie]);
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setFormData(prevFormData => ({
+      ...prevFormData,
+      [name]: (name === 'releaseYear' || name === 'rating') ? parseInt(value) || '' : value
+    }));
   };
 
   const handleArrayChange = (field, index, value) => {
@@ -71,6 +75,7 @@ const MovieForm = ({ movie, onSubmit, onCancel }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
 
     // Filter out empty strings from arrays
     const filteredData = {
@@ -81,8 +86,9 @@ const MovieForm = ({ movie, onSubmit, onCancel }) => {
 
     try {
       await onSubmit(filteredData);
-    } catch (error) {
-      console.error('Error submitting form:', error);
+    } catch (err) {
+      console.error('Error submitting form:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to submit form.');
     } finally {
       setLoading(false);
     }
@@ -103,6 +109,9 @@ const MovieForm = ({ movie, onSubmit, onCancel }) => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <div className="form-error-banner">{error}</div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="form-group">
             <label className="form-label">Title *</label>
@@ -159,15 +168,30 @@ const MovieForm = ({ movie, onSubmit, onCancel }) => {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Music Director *</label>
+          <label className="form-label">Movie Director *</label>
           <input
             type="text"
-            name="musicDirector"
-            value={formData.musicDirector}
+            name="movieDirector"
+            value={formData.movieDirector}
             onChange={handleChange}
             className="form-input"
-            placeholder="Enter music director name"
+            placeholder="Enter movie director name"
             required
+          />
+        </div>
+
+        {/* Rating Input */}
+        <div className="form-group">
+          <label className="form-label">Rating (0-10)</label>
+          <input
+            type="number"
+            name="rating"
+            value={formData.rating}
+            onChange={handleChange}
+            className="form-input"
+            min="0"
+            max="10"
+            step="1"
           />
         </div>
 
@@ -238,7 +262,7 @@ const MovieForm = ({ movie, onSubmit, onCancel }) => {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Download Link *</label>
+          <label className="form-label">Download Link</label>
           <input
             type="url"
             name="downloadLink"
@@ -246,7 +270,6 @@ const MovieForm = ({ movie, onSubmit, onCancel }) => {
             onChange={handleChange}
             className="form-input"
             placeholder="Enter download URL"
-            required
           />
         </div>
 

@@ -2,6 +2,42 @@ const express = require('express');
 const User = require('../models/User');
 const Movie = require('../models/Movie');
 const router = express.Router();
+const { protect, admin } = require('../middleware/authMiddleware');
+
+// Get all users (Admin only)
+router.get('/', protect, admin, async (req, res) => {
+  try {
+    const users = await User.find({}).select('-password');
+    res.json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// Get user by ID
+router.get('/:userId', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      user
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
 
 // Get user's recently visited movies
 router.get('/:userId/recently-visited', async (req, res) => {
@@ -44,7 +80,6 @@ router.post('/:userId/recent', async (req, res) => {
     }
 
     // Check if movie exists
-    const Movie = require('../models/Movie');
     const movie = await Movie.findById(movieId);
     if (!movie) {
       return res.status(404).json({
@@ -64,16 +99,15 @@ router.post('/:userId/recent', async (req, res) => {
       visitedAt: new Date()
     });
 
-    // Keep only last 15 entries
-    if (user.recentlyVisited.length > 15) {
-      user.recentlyVisited = user.recentlyVisited.slice(0, 15);
+    // Keep the list at a certain size, e.g., 10
+    if (user.recentlyVisited.length > 10) {
+      user.recentlyVisited.pop();
     }
 
     await user.save();
 
     res.json({
       success: true,
-      message: 'Movie added to recently visited',
       recentlyVisited: user.recentlyVisited
     });
   } catch (error) {
@@ -188,41 +222,97 @@ router.get('/:userId/recommendations', async (req, res) => {
   }
 });
 
-// Update user profile
-router.put('/:userId', async (req, res) => {
+// Update user profile (also used by admin to update any user)
+router.put('/:userId', protect, async (req, res) => {
   try {
-    const { username, email } = req.body;
-    
-    const user = await User.findByIdAndUpdate(
-      req.params.userId,
-      { username, email },
-      { new: true, runValidators: true }
-    );
+    const user = await User.findById(req.params.userId);
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
+
+    // Only admin or the user themselves can update
+    if (req.user.userType !== 'admin' && req.user._id.toString() !== user._id.toString()) {
+      return res.status(401).json({ success: false, message: 'Not authorized' });
+    }
+
+    user.username = req.body.username || user.username;
+    user.email = req.body.email || user.email;
+
+    // Only admin can change userType
+    if (req.user.userType === 'admin') {
+      user.userType = req.body.userType || user.userType;
+    }
+
+    const updatedUser = await user.save();
 
     res.json({
       success: true,
       message: 'Profile updated successfully',
       user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        userType: user.userType
-      }
+        id: updatedUser._id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        userType: updatedUser.userType,
+      },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Server error',
-      error: error.message
+      error: error.message,
     });
   }
 });
+
+// Update user (Admin only)
+router.put('/:id', protect, admin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (user) {
+      user.username = req.body.username || user.username;
+      user.email = req.body.email || user.email;
+      user.userType = req.body.userType || user.userType;
+
+      const updatedUser = await user.save();
+
+      res.json({
+        success: true,
+        user: {
+          _id: updatedUser._id,
+          username: updatedUser.username,
+          email: updatedUser.email,
+          userType: updatedUser.userType,
+        },
+      });
+    } else {
+      res.status(404).json({ success: false, message: 'User not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// Delete user (Admin only)
+router.delete('/:id', protect, admin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (user) {
+      // Optional: Add logic to prevent admin from deleting themselves
+      if (req.user.id.toString() === user._id.toString()) {
+        return res.status(400).json({ success: false, message: 'Admins cannot delete their own account.' });
+      }
+      await user.deleteOne();
+      res.json({ success: true, message: 'User removed' });
+    } else {
+      res.status(404).json({ success: false, message: 'User not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
 
 module.exports = router;

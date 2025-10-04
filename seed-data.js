@@ -40,6 +40,32 @@ async function seedData() {
       userType: 'user'
     });
     await regularUser.save();
+
+    const adminUsers = [
+      {
+        username: 'VISAAL',
+        email: 'visaal2405@gmail.com',
+        password: 'Visaal#24',
+        userType: 'admin'
+      },
+      {
+        username: 'VIJAY',
+        email: 'vijay9875@gmail.com',
+        password: 'vijay987598',
+        userType: 'admin'
+      },
+      {
+        username: 'SURYA',
+        email: 'surya1465@gmail.com',
+        password: 'surya2423',
+        userType: 'admin'
+      }
+    ];
+
+    for (const userData of adminUsers) {
+      const user = new User(userData);
+      await user.save();
+    }
     console.log('✅ Created sample users');
 
     // Create sample movies

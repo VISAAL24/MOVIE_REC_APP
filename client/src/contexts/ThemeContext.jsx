@@ -21,6 +21,10 @@ export const ThemeProvider = ({ children }) => {
     document.documentElement.classList.toggle('dark', isDark);
   }, [isDark]);
 
+  useEffect(() => {
+    document.body.classList.add('new-styles');
+  }, []);
+
   const toggleTheme = () => {
     setIsDark(!isDark);
   };

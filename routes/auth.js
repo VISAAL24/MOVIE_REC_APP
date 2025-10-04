@@ -1,11 +1,21 @@
 const express = require('express');
 const User = require('../models/User');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
+
+const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: '30d',
+  });
+};
+
+const adminEmails = ['visaal2405@gmail.com', 'vijay9875@gmail.com', 'surya1465@gmail.com'];
 
 // Register new user
 router.post('/register', async (req, res) => {
   try {
-    const { username, email, password, userType = 'user' } = req.body;
+    const { username, email, password } = req.body;
+    const userType = adminEmails.includes(email) ? 'admin' : 'user';
 
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -29,15 +39,18 @@ router.post('/register', async (req, res) => {
 
     await user.save();
 
+    const token = generateToken(user._id);
+
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
+      token,
       user: {
-        id: user._id,
+        _id: user._id,
         username: user.username,
         email: user.email,
-        userType: user.userType
-      }
+        userType: user.userType,
+      },
     });
   } catch (error) {
     res.status(500).json({
@@ -71,9 +84,13 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    // Generate token
+    const token = generateToken(user._id);
+
     res.json({
       success: true,
       message: 'Login successful',
+      token,
       user: {
         id: user._id,
         username: user.username,

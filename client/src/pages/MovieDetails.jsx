@@ -7,7 +7,7 @@ import { ArrowLeft, Play, Download, Heart, ThumbsDown, MessageCircle, Eye, Star 
 
 const MovieDetails = () => {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, likedMovies, setLikedMovies } = useAuth();
   const { showSuccess, showError } = useToast();
   const navigate = useNavigate();
   const [movie, setMovie] = useState(null);
@@ -17,14 +17,35 @@ const MovieDetails = () => {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [userReaction, setUserReaction] = useState(null);
 
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
-    fetchMovieDetails();
+    // Increment view count when user visits the page
+    const incrementView = async () => {
+      try {
+        const userId = user._id || user.id;
+        const res = await axios.post(`http://localhost:5000/api/movies/${id}/view`, { userId });
+        if (!res.data.success) {
+          console.error('View endpoint returned non-success:', res.data);
+        }
+        fetchMovieDetails();
+      } catch (error) {
+        console.error('Error incrementing view:', error.response ? error.response.data : error.message);
+        fetchMovieDetails();
+      }
+    };
+    incrementView();
     fetchComments();
-  }, [id, user, navigate]);
+    // Set userReaction based on likedMovies
+    if (likedMovies && likedMovies.includes(id)) {
+      setUserReaction('like');
+    } else {
+      setUserReaction(null);
+    }
+  }, [id, user, likedMovies, navigate]);
 
   const fetchMovieDetails = async () => {
     try {
@@ -53,19 +74,15 @@ const MovieDetails = () => {
 
   const handleReaction = async (action) => {
     if (!user) return;
-
     try {
-      // Determine the action based on current state
       let newAction = action;
       if (userReaction === action) {
-        newAction = 'remove'; // Toggle off if already liked/disliked
+        newAction = 'remove';
       }
-
       const response = await axios.post(`http://localhost:5000/api/movies/${id}/reaction`, {
         userId: user.id,
         action: newAction
       });
-
       if (response.data.success) {
         setMovie(prev => ({
           ...prev,
@@ -73,6 +90,12 @@ const MovieDetails = () => {
           dislikes: response.data.movie.dislikes
         }));
         setUserReaction(response.data.userReaction);
+        // Update likedMovies in context
+        if (newAction === 'like') {
+          setLikedMovies(prev => [...prev, id]);
+        } else if (newAction === 'remove') {
+          setLikedMovies(prev => prev.filter(mid => mid !== id));
+        }
         showSuccess(`Movie ${newAction === 'remove' ? 'un' + (action === 'like' ? 'liked' : 'disliked') : newAction + 'd'} successfully!`);
       }
     } catch (error) {
@@ -82,23 +105,32 @@ const MovieDetails = () => {
 
   const handleCommentSubmit = async (e) => {
     e.preventDefault();
-    if (!commentText.trim() || !user) return;
+    console.log("Attempting to post comment...");
+    console.log("User object from AuthContext:", user);
+    console.log("Comment Text:", commentText);
+    if (!commentText.trim() || !user || !user._id || !user.username) {
+      showError("Comment cannot be empty, or user information is missing. Please log in again.");
+      return;
+    }
 
     try {
       setSubmittingComment(true);
       const response = await axios.post(`http://localhost:5000/api/movies/${id}/comments`, {
-        userId: user.id,
+        userId: user._id, // Ensure we are sending the Mongoose _id
         username: user.username,
         content: commentText.trim()
       });
 
       if (response.data.success) {
-        setComments([response.data.comment, ...comments]);
+        fetchComments(); // Re-fetch all comments to ensure consistency
         setCommentText('');
         showSuccess('Comment added successfully!');
+      } else {
+        showError(response.data.message || 'Failed to post comment.');
       }
     } catch (error) {
-      console.error('Error submitting comment:', error);
+      console.error('Error submitting comment:', error.response ? error.response.data : error.message);
+      showError(error.response?.data?.message || 'Failed to post comment. Please try again.');
     } finally {
       setSubmittingComment(false);
     }
@@ -129,99 +161,84 @@ const MovieDetails = () => {
   }
 
   return (
-    <div className="min-h-screen bg-secondary">
-      <div className="container py-6">
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+      <div className="w-[90vw] max-w-7xl mx-auto px-4 py-8">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-primary hover:text-blue-500 mb-6"
+          className="back-to-list mb-8"
         >
-          <ArrowLeft size={20} />
-          Back
+          <ArrowLeft size={18} />
+          <span>Back to list</span>
         </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Movie Info */}
-          <div className="lg:col-span-2">
-            <div className="bg-card p-6 rounded-lg shadow">
-              <div className="flex items-start gap-6 mb-6">
-                {movie.posterUrl && (
-                  <img
-                    src={movie.posterUrl}
-                    alt={movie.title}
-                    className="object-cover rounded-lg"
-                    style={{
-                      maxWidth: '400px',
-                      maxHeight: '600px',
-                      width: 'auto',
-                      height: 'auto'
-                    }}
-                  />
-                )}
-                <div className="flex-1">
-                  <h1 className="text-3xl font-bold text-primary mb-2">{movie.title}</h1>
-                  <div className="flex items-center gap-4 mb-4">
-                    <span className="text-secondary">{movie.releaseYear}</span>
-                    <span className="text-secondary">{movie.duration}</span>
-                    <span className="text-secondary">{movie.language}</span>
+        <div className="flex flex-row gap-8 lg:gap-12">
+          {/* Left Column: Poster */}
+          <div className="poster-column">
+            {movie.posterUrl && (
+              <img
+                src={movie.posterUrl}
+                alt={movie.title}
+                className="poster-lg"
+              />
+            )}
+          </div>
+
+          {/* Right Column: Details */}
+          <div className="flex-1 flex flex-col">
+            <div className="flex flex-col h-full">
+              <div className="flex-grow">
+                <h1 className="text-4xl lg:text-5xl font-bold text-foreground mb-2">{movie.title}</h1>
+                <div className="flex items-center flex-wrap gap-x-4 gap-y-2 text-muted-foreground mb-6">
+                  <span>{movie.releaseYear}</span>
+                  <span className="hidden md:inline">|</span>
+                  <span>{movie.duration}</span>
+                  <span className="hidden md:inline">|</span>
+                  <span>{movie.language}</span>
+                </div>
+                
+                {movie.description && (
+                  <div className="mb-6">
+                    <h3 className="font-semibold text-foreground text-lg mb-2">Synopsis</h3>
+                    <p className="text-muted-foreground leading-relaxed">{movie.description}</p>
                   </div>
-                  
-                  <div className="mb-4">
-                    <h3 className="font-semibold text-primary mb-2">Categories</h3>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6">
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-2">Categories</h3>
                     <div className="flex flex-wrap gap-2">
-                      {movie.categories.map((category, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                        >
+                      {movie.categories.map((category) => (
+                        <span key={category} className="px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-sm font-medium">
                           {category}
                         </span>
                       ))}
                     </div>
                   </div>
-
-                  <div className="mb-4">
-                    <h3 className="font-semibold text-primary mb-2">Cast</h3>
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-2">Cast</h3>
                     <div className="flex flex-wrap gap-2">
-                      {movie.artists.map((artist, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm"
-                        >
+                      {movie.artists.map((artist) => (
+                        <span key={artist} className="px-3 py-1 bg-secondary text-secondary-foreground rounded-full text-sm font-medium">
                           {artist}
                         </span>
                       ))}
                     </div>
                   </div>
+                </div>
 
-                  <div className="mb-4">
-                    <p className="text-secondary">
-                      <span className="font-semibold">Music Director:</span> {movie.musicDirector}
-                    </p>
-                  </div>
-
-                  {movie.description && (
-                    <div className="mb-4">
-                      <h3 className="font-semibold text-primary mb-2">Description</h3>
-                      <p className="text-secondary">{movie.description}</p>
-                    </div>
-                  )}
+                <div className="mb-6">
+                  <p className="text-muted-foreground">
+                    <span className="font-semibold text-foreground">Movie Director:</span> {movie.movieDirector}
+                  </p>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-4 mb-6">
-                <button
-                  onClick={() => window.open(movie.downloadLink, '_blank')}
-                  className="btn btn-primary flex items-center gap-2"
-                >
-                  <Download size={20} />
-                  Download
-                </button>
-                
+              <div className="flex flex-col sm:flex-row items-center gap-4 mb-8">
                 {movie.trailerUrl && (
                   <button
                     onClick={() => window.open(movie.trailerUrl, '_blank')}
-                    className="btn btn-outline flex items-center gap-2"
+                    className="btn btn-outline w-full sm:w-auto flex items-center justify-center gap-2"
                   >
                     <Play size={20} />
                     Watch Trailer
@@ -229,76 +246,78 @@ const MovieDetails = () => {
                 )}
               </div>
 
-              {/* Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="text-center p-4 bg-secondary rounded-lg">
-                  <Eye size={24} className="mx-auto mb-2 text-blue-500" />
-                  <div className="text-2xl font-bold text-primary">{movie.viewCount}</div>
-                  <div className="text-sm text-secondary">Views</div>
+              {/* Stats & Reactions */}
+              <div className="bg-card p-4 rounded-lg">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <div className="text-center">
+                    <Eye size={24} className="mx-auto mb-1 text-blue-500" />
+                    <div className="text-xl font-bold text-foreground">{movie.viewCount}</div>
+                    <div className="text-sm text-muted-foreground">Views</div>
+                  </div>
+                  <div className="text-center">
+                    <Heart size={24} className="mx-auto mb-1 text-red-500" />
+                    <div className="text-xl font-bold text-foreground">{movie.likes}</div>
+                    <div className="text-sm text-muted-foreground">Likes</div>
+                  </div>
+                  <div className="text-center">
+                    <ThumbsDown size={24} className="mx-auto mb-1 text-gray-500" />
+                    <div className="text-xl font-bold text-foreground">{movie.dislikes}</div>
+                    <div className="text-sm text-muted-foreground">Dislikes</div>
+                  </div>
+                  <div className="text-center">
+                    <Star size={24} className="mx-auto mb-1 text-yellow-500" />
+                    <div className="text-xl font-bold text-foreground">{movie.rating || 'N/A'}</div>
+                    <div className="text-sm text-muted-foreground">Rating</div>
+                  </div>
                 </div>
-                <div className="text-center p-4 bg-secondary rounded-lg">
-                  <Heart size={24} className="mx-auto mb-2 text-red-500" />
-                  <div className="text-2xl font-bold text-primary">{movie.likes}</div>
-                  <div className="text-sm text-secondary">Likes</div>
-                </div>
-                <div className="text-center p-4 bg-secondary rounded-lg">
-                  <ThumbsDown size={24} className="mx-auto mb-2 text-gray-500" />
-                  <div className="text-2xl font-bold text-primary">{movie.dislikes}</div>
-                  <div className="text-sm text-secondary">Dislikes</div>
-                </div>
-                <div className="text-center p-4 bg-secondary rounded-lg">
-                  <Star size={24} className="mx-auto mb-2 text-yellow-500" />
-                  <div className="text-2xl font-bold text-primary">{movie.rating || 'N/A'}</div>
-                  <div className="text-sm text-secondary">Rating</div>
-                </div>
-              </div>
 
-              {/* User Reactions */}
-              {user && (
-                <div className="flex items-center gap-4 mb-6">
-                  <button
-                    onClick={() => handleReaction(userReaction === 'like' ? 'remove' : 'like')}
-                    className={`btn flex items-center gap-2 ${
-                      userReaction === 'like' ? 'btn-primary' : 'btn-outline'
-                    }`}
-                  >
-                    <Heart size={20} />
-                    {userReaction === 'like' ? 'Liked' : 'Like'}
-                  </button>
-                  <button
-                    onClick={() => handleReaction(userReaction === 'dislike' ? 'remove' : 'dislike')}
-                    className={`btn flex items-center gap-2 ${
-                      userReaction === 'dislike' ? 'btn-danger' : 'btn-outline'
-                    }`}
-                  >
-                    <ThumbsDown size={20} />
-                    {userReaction === 'dislike' ? 'Disliked' : 'Dislike'}
-                  </button>
-                </div>
-              )}
+                {user && (
+                  <div className="flex items-center justify-center gap-4 pt-4 border-t border-border">
+                    <button
+                      onClick={() => handleReaction(userReaction === 'like' ? 'remove' : 'like')}
+                      className={`btn flex items-center gap-2 transition-colors ${
+                        userReaction === 'like' ? 'btn-primary' : 'btn-outline'
+                      }`}
+                    >
+                      <Heart size={20} />
+                      {userReaction === 'like' ? 'Liked' : 'Like'}
+                    </button>
+                    <button
+                      onClick={() => handleReaction(userReaction === 'dislike' ? 'remove' : 'dislike')}
+                      className={`btn flex items-center gap-2 transition-colors ${
+                        userReaction === 'dislike' ? 'btn-danger' : 'btn-outline'
+                      }`}
+                    >
+                      <ThumbsDown size={20} />
+                      {userReaction === 'dislike' ? 'Disliked' : 'Dislike'}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+        </div>
 
-          {/* Comments Section */}
-          <div className="lg:col-span-1">
-            <div className="bg-card p-6 rounded-lg shadow">
-              <h2 className="text-xl font-bold text-primary mb-4 flex items-center gap-2">
-                <MessageCircle size={24} />
-                Comments ({comments.length})
-              </h2>
+        {/* Comments Section */}
+        <div className="mt-12">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-3">
+              <MessageCircle size={28} />
+              Comments ({comments.length})
+            </h2>
 
-              {/* Add Comment */}
-              {user && (
-                <form onSubmit={handleCommentSubmit} className="mb-6">
-                  <div className="form-group">
-                    <textarea
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      placeholder="Write a comment..."
-                      className="form-input h-20 resize-none"
-                      rows="3"
-                    />
-                  </div>
+            {user && (
+              <form onSubmit={handleCommentSubmit} className="mb-8">
+                <div className="form-group mb-4">
+                  <textarea
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Share your thoughts..."
+                    className="form-input h-24 resize-none"
+                    rows="4"
+                  />
+                </div>
+                <div className="flex justify-end">
                   <button
                     type="submit"
                     disabled={!commentText.trim() || submittingComment}
@@ -306,31 +325,36 @@ const MovieDetails = () => {
                   >
                     {submittingComment ? 'Posting...' : 'Post Comment'}
                   </button>
-                </form>
-              )}
+                </div>
+              </form>
+            )}
 
-              {/* Comments List */}
-              <div className="space-y-4">
-                {comments.map(comment => (
-                  <div key={comment._id} className="border-b border pb-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="font-semibold text-primary">{comment.username}</span>
-                      <span className="text-sm text-secondary">
-                        {new Date(comment.createdAt).toLocaleDateString()}
-                      </span>
-                      {comment.isEdited && (
-                        <span className="text-xs text-secondary">(edited)</span>
-                      )}
+            <div className="space-y-6">
+              {comments.map(comment => (
+                <div key={comment._id} className="bg-card p-4 rounded-lg shadow-sm">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
+                      {comment.username.charAt(0).toUpperCase()}
                     </div>
-                    <p className="text-secondary">{comment.content}</p>
+                    <div>
+                      <span className="font-semibold text-foreground">{comment.username}</span>
+                      <div className="text-xs text-muted-foreground flex items-center gap-2">
+                        <span>{new Date(comment.createdAt).toLocaleDateString()}</span>
+                        {comment.isEdited && <span>&bull; (edited)</span>}
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
-
-              {comments.length === 0 && (
-                <p className="text-secondary text-center py-4">No comments yet</p>
-              )}
+                  <p className="text-secondary-foreground leading-relaxed">{comment.content}</p>
+                </div>
+              ))}
             </div>
+
+            {comments.length === 0 && !user && (
+              <p className="text-muted-foreground text-center py-8">Login to see and post comments.</p>
+            )}
+            {comments.length === 0 && user && (
+              <p className="text-muted-foreground text-center py-8">Be the first to comment!</p>
+            )}
           </div>
         </div>
       </div>

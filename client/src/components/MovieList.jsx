@@ -51,20 +51,11 @@ const MovieList = ({ movies, isAdmin = false, onEdit, onDelete, onClick }) => {
                       <img
                         src={movie.posterUrl}
                         alt={movie.title}
-                        className="object-cover rounded-lg shadow-sm"
-                        style={{
-                          width: '60px',
-                          height: '90px',
-                          objectFit: 'cover'
-                        }}
+                        className="poster-xs"
                       />
                     ) : (
                       <div 
-                        className="bg-gray-200 dark:bg-gray-700 flex items-center justify-center rounded-lg shadow-sm"
-                        style={{
-                          width: '60px',
-                          height: '90px'
-                        }}
+                        className="bg-gray-200 dark:bg-gray-700 flex items-center justify-center poster-xs"
                       >
                         <Play size={20} className="text-gray-400" />
                       </div>

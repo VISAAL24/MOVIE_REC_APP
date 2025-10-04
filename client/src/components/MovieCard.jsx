@@ -1,7 +1,7 @@
 import React from 'react';
 import { Eye, Heart, ThumbsDown, Edit, Trash2, Play } from 'lucide-react';
 
-const MovieCard = ({ movie, isAdmin = false, onEdit, onDelete, onClick }) => {
+const MovieCard = ({ movie, isAdmin = false, onEdit, onDelete, onClick, onLike }) => {
   const handleCardClick = () => {
     if (onClick) {
       onClick(movie._id);
@@ -22,6 +22,13 @@ const MovieCard = ({ movie, isAdmin = false, onEdit, onDelete, onClick }) => {
     }
   };
 
+  const handleLikeClick = (e) => {
+    e.stopPropagation();
+    if (onLike) {
+      onLike(movie._id);
+    }
+  };
+
   return (
     <div
       className="bg-card rounded-xl shadow-md hover:shadow-lg transition-all duration-300 group cursor-pointer overflow-hidden border border-gray-200 dark:border-gray-700 hover:scale-105"
@@ -32,26 +39,15 @@ const MovieCard = ({ movie, isAdmin = false, onEdit, onDelete, onClick }) => {
           <img
             src={movie.posterUrl}
             alt={movie.title}
-            className="w-full object-cover group-hover:scale-105 transition-transform duration-300"
-            style={{
-              width: '200px',
-              height: '300px',
-              objectFit: 'cover'
-            }}
+            className="poster-sm group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
-          <div 
-            className="bg-secondary flex items-center justify-center"
-            style={{
-              width: '200px',
-              height: '300px'
-            }}
-          >
+          <div className="bg-secondary flex items-center justify-center poster-sm">
             <Play size={32} className="text-gray-400" />
           </div>
         )}
-        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
-          <Play size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center card-overlay">
+          <Play size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 overlay-icon" />
         </div>
       </div>
       
@@ -82,14 +78,16 @@ const MovieCard = ({ movie, isAdmin = false, onEdit, onDelete, onClick }) => {
         </div>
 
         <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-4 text-sm text-secondary">
+            <div className="flex items-center gap-4 text-sm text-secondary">
             <div className="flex items-center gap-1">
               <Eye size={16} className="text-blue-500" />
               <span className="font-medium">{movie.viewCount || movie.views || 0}</span>
             </div>
             <div className="flex items-center gap-1">
-              <Heart size={16} className="text-red-500" />
-              <span className="font-medium">{movie.likes}</span>
+              <button onClick={handleLikeClick} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-150" title="Like" aria-label="Like">
+                <Heart size={16} className={`text-red-500 ${movie.isLiked ? 'font-bold scale-110' : ''}`} />
+              </button>
+              <span className={`font-medium ${movie.isLiked ? 'text-red-600 font-bold' : ''}`}>{movie.likes}</span>
             </div>
             <div className="flex items-center gap-1">
               <ThumbsDown size={16} className="text-gray-500" />
